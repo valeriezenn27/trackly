@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/Trackly.Api/Trackly.Api.csproj" />
+    <Project Path="backend/Trackly.Application/Trackly.Application.csproj" />
+    <Project Path="backend/Trackly.Domain/Trackly.Domain.csproj" />
+    <Project Path="backend/Trackly.Infrastructure/Trackly.Infrastructure.csproj" />
+  </Folder>
+</Solution>

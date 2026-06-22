@@ -1,0 +1,2 @@
+import{inject,Injectable}from'@angular/core';import{HttpClient}from'@angular/common/http';import{environment}from'../../environments/environment';import{ScrapeJob}from'../models';
+@Injectable({providedIn:'root'})export class ScrapingService{private http=inject(HttpClient);run(sourceId:string){return this.http.post<ScrapeJob>(`${environment.apiUrl}/scraping/run/${sourceId}`,{})}jobs(){return this.http.get<ScrapeJob[]>(`${environment.apiUrl}/scraping/jobs`)}get(id:string){return this.http.get<ScrapeJob>(`${environment.apiUrl}/scraping/jobs/${id}`)}}

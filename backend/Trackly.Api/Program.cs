@@ -1,0 +1,28 @@
+using Microsoft.EntityFrameworkCore;
+using Trackly.Application.Interfaces;
+using Trackly.Domain.Entities;
+using Trackly.Infrastructure;
+using Trackly.Infrastructure.Persistence;
+
+var builder=WebApplication.CreateBuilder(args);
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddEndpointsApiExplorer(); builder.Services.AddSwaggerGen();
+builder.Services.AddCors(o=>o.AddDefaultPolicy(p=>p.WithOrigins(builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? ["http://localhost:4200"]).AllowAnyHeader().AllowAnyMethod()));
+var app=builder.Build(); using(var scope=app.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<TracklyDbContext>();await db.Database.MigrateAsync();} app.UseSwagger(); app.UseSwaggerUI(); app.UseCors();
+app.UseExceptionHandler(handler=>handler.Run(async context=>{ context.Response.StatusCode=500; await context.Response.WriteAsJsonAsync(new { error="An unexpected error occurred." }); }));
+var sources=app.MapGroup("/api/sources");
+sources.MapGet("/",async(TracklyDbContext db)=>await db.Sources.AsNoTracking().OrderBy(x=>x.Name).ToListAsync());
+sources.MapPost("/",async(Source input,TracklyDbContext db)=>{ if(string.IsNullOrWhiteSpace(input.Name)||!Uri.TryCreate(input.BaseUrl,UriKind.Absolute,out _)) return Results.BadRequest(new{error="Name and a valid base URL are required."}); input.Id=Guid.NewGuid(); input.CreatedAt=DateTime.UtcNow; db.Sources.Add(input); await db.SaveChangesAsync(); return Results.Created($"/api/sources/{input.Id}",input); });
+sources.MapPut("/{id:guid}",async(Guid id,Source input,TracklyDbContext db)=>{ var item=await db.Sources.FindAsync(id); if(item is null)return Results.NotFound(); item.Name=input.Name;item.BaseUrl=input.BaseUrl;item.SourceType=input.SourceType;item.IsActive=input.IsActive;await db.SaveChangesAsync();return Results.Ok(item); });
+sources.MapDelete("/{id:guid}",async(Guid id,TracklyDbContext db)=>{var item=await db.Sources.FindAsync(id);if(item is null)return Results.NotFound();db.Sources.Remove(item);await db.SaveChangesAsync();return Results.NoContent();});
+var products=app.MapGroup("/api/products");
+products.MapGet("/",async(string? search,string? category,TracklyDbContext db)=>{var q=db.Products.AsNoTracking().AsQueryable();if(!string.IsNullOrWhiteSpace(search))q=q.Where(x=>x.Name.ToLower().Contains(search.ToLower()));if(!string.IsNullOrWhiteSpace(category))q=q.Where(x=>x.Category==category);return await q.OrderBy(x=>x.Name).ToListAsync();});
+products.MapGet("/{id:guid}",async(Guid id,TracklyDbContext db)=>await db.Products.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id) is { } p?Results.Ok(p):Results.NotFound());
+products.MapGet("/{id:guid}/price-history",async(Guid id,TracklyDbContext db)=>await db.PriceHistories.AsNoTracking().Where(x=>x.ProductId==id).OrderBy(x=>x.ScrapedAt).ToListAsync());
+products.MapDelete("/{id:guid}",async(Guid id,TracklyDbContext db)=>{var p=await db.Products.FindAsync(id);if(p is null)return Results.NotFound();db.Products.Remove(p);await db.SaveChangesAsync();return Results.NoContent();});
+var scraping=app.MapGroup("/api/scraping");
+scraping.MapPost("/run/{sourceId:guid}",async(Guid sourceId,IScrapeRunner runner,CancellationToken ct)=>{try{return Results.Ok(await runner.RunAsync(sourceId,ct));}catch(KeyNotFoundException){return Results.NotFound();}catch(InvalidOperationException e){return Results.BadRequest(new{error=e.Message});}});
+scraping.MapGet("/jobs",async(TracklyDbContext db)=>await db.ScrapeJobs.AsNoTracking().Include(x=>x.Source).OrderByDescending(x=>x.StartedAt).Select(x=>new{x.Id,x.SourceId,SourceName=x.Source.Name,x.Status,x.StartedAt,x.FinishedAt,x.ProductsFound,x.ProductsUpdated,x.ErrorMessage}).ToListAsync());
+scraping.MapGet("/jobs/{id:guid}",async(Guid id,TracklyDbContext db)=>await db.ScrapeJobs.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id) is { } j?Results.Ok(j):Results.NotFound());
+app.MapGet("/api/dashboard/summary",async(TracklyDbContext db)=>{var today=DateTime.UtcNow.Date;var latest=await db.ScrapeJobs.AsNoTracking().OrderByDescending(x=>x.StartedAt).Select(x=>x.Status).FirstOrDefaultAsync();var drops=await db.Products.AsNoTracking().CountAsync(p=>p.PriceHistories.Any(h=>h.Price>p.CurrentPrice));return new{totalProducts=await db.Products.CountAsync(),totalSources=await db.Sources.CountAsync(),latestScrapeStatus=latest,productsWithPriceDrop=drops,productsScrapedToday=await db.Products.CountAsync(x=>x.LastScrapedAt>=today)};});
+app.MapGet("/health",()=>Results.Ok(new{status="healthy"})); app.Run();

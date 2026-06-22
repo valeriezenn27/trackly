@@ -1,0 +1,2 @@
+import{Component}from'@angular/core';
+@Component({standalone:true,template:`<div class="page-head"><div><p class="eyebrow">PREFERENCES</p><h1>Settings</h1><p>A home for future notification and tracking controls.</p></div></div><section class="panel settings"><div class="setting-icon">⚙</div><h2>More control is coming</h2><p>Future versions will include price-drop alerts, currency preferences, scrape schedules, and notification channels.</p><button class="ghost" disabled>Coming soon</button></section>`})export class SettingsComponent{}

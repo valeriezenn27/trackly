@@ -1,0 +1,1 @@
+import{inject,Injectable}from'@angular/core';import{HttpClient}from'@angular/common/http';import{environment}from'../../environments/environment';import{Summary}from'../models';@Injectable({providedIn:'root'})export class DashboardService{private http=inject(HttpClient);summary(){return this.http.get<Summary>(`${environment.apiUrl}/dashboard/summary`)}}

@@ -1,0 +1,2 @@
+namespace Trackly.Domain.Entities;
+public class ScrapeJob { public Guid Id { get; set; } = Guid.NewGuid(); public Guid SourceId { get; set; } public Source Source { get; set; } = null!; public string Status { get; set; } = "Running"; public DateTime? StartedAt { get; set; } public DateTime? FinishedAt { get; set; } public int ProductsFound { get; set; } public int ProductsUpdated { get; set; } public string? ErrorMessage { get; set; } }

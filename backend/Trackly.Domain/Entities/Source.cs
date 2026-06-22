@@ -1,0 +1,2 @@
+namespace Trackly.Domain.Entities;
+public class Source { public Guid Id { get; set; } = Guid.NewGuid(); public string Name { get; set; } = ""; public string BaseUrl { get; set; } = ""; public string SourceType { get; set; } = "Product"; public bool IsActive { get; set; } = true; public DateTime CreatedAt { get; set; } = DateTime.UtcNow; public ICollection<Product> Products { get; set; } = []; public ICollection<ScrapeJob> ScrapeJobs { get; set; } = []; }

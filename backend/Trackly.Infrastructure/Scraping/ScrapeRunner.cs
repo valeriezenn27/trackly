@@ -1,0 +1,10 @@
+using Microsoft.EntityFrameworkCore;
+using Trackly.Application.Interfaces;
+using Trackly.Domain.Entities;
+using Trackly.Infrastructure.Persistence;
+namespace Trackly.Infrastructure.Scraping;
+public class ScrapeRunner(TracklyDbContext db, IBooksToScrapeScraper scraper) : IScrapeRunner {
+ public async Task<ScrapeJob> RunAsync(Guid sourceId, CancellationToken ct=default) { var source=await db.Sources.FindAsync([sourceId],ct) ?? throw new KeyNotFoundException("Source not found."); if(!source.IsActive) throw new InvalidOperationException("Source is inactive."); var job=new ScrapeJob { SourceId=sourceId,Status="Running",StartedAt=DateTime.UtcNow }; db.ScrapeJobs.Add(job); await db.SaveChangesAsync(ct);
+  try { var items=await scraper.ScrapeAsync(source.BaseUrl,ct); job.ProductsFound=items.Count; foreach(var item in items) { var now=DateTime.UtcNow; var product=await db.Products.SingleOrDefaultAsync(x=>x.SourceId==sourceId&&x.ProductUrl==item.ProductUrl,ct); if(product is null) { product=new Product { SourceId=sourceId,Name=item.Name,ProductUrl=item.ProductUrl,ImageUrl=item.ImageUrl,Category=item.Category,CurrentPrice=item.Price,Currency=item.Currency,Availability=item.Availability,Rating=item.Rating,LastScrapedAt=now,CreatedAt=now,UpdatedAt=now }; db.Products.Add(product); job.ProductsUpdated++; } else { var changed=product.CurrentPrice!=item.Price; product.Name=item.Name; product.ImageUrl=item.ImageUrl; product.Category=item.Category; product.Availability=item.Availability; product.Rating=item.Rating; product.LastScrapedAt=now; if(changed) { product.CurrentPrice=item.Price; product.Currency=item.Currency; product.UpdatedAt=now; job.ProductsUpdated++; } } db.PriceHistories.Add(new PriceHistory { Product=product,Price=item.Price,Currency=item.Currency,ScrapedAt=now }); } job.Status="Completed"; job.FinishedAt=DateTime.UtcNow; await db.SaveChangesAsync(ct); }
+  catch(Exception ex) { job.Status="Failed"; job.FinishedAt=DateTime.UtcNow; job.ErrorMessage=ex.Message[..Math.Min(ex.Message.Length,2000)]; await db.SaveChangesAsync(CancellationToken.None); } return job; }
+}
